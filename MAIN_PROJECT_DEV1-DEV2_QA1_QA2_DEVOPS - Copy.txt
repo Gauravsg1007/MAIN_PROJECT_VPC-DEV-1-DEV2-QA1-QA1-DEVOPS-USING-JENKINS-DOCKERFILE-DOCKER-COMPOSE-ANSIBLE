@@ -1,0 +1,249 @@
+MAIN PROJECT
+
+JENKINS JOB1:
+
+pipeline{
+    agent {
+        node {
+            label ' built-in'
+        }
+    }
+    
+    stages {
+        
+        stage ("clone project") {
+            
+            tools{
+                jdk 'java'
+            }
+            
+            
+            steps{
+                sh " sudo chown -R velocity:velocity /mnt"
+                dir ("/mnt/project/"){
+                    git 'https://github.com/ashrayp18/game-of-life.git'
+                    sh 'mvn install -DskipTests'
+                }
+                sh " cp /mnt/project/gameoflife-web/target/gameoflife.war /mnt/docky/" 
+                dir ("/mnt/docky/"){
+                sh " wget https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.67/bin/apache-tomcat-9.0.67.tar.gz"
+                }
+                dir ("/mnt/server"){
+                    sh "ansible-playbook project.yaml"
+                }
+            }
+        }
+        
+    
+    }
+    
+}
+
+JENKINS JOB2:
+
+pipeline{
+    agent none
+     stages{
+         stage ('MASTER_SCP') {
+            agent{
+      node {
+         label 'built-in'
+    }
+    }
+            
+            steps{
+                sh "scp /mnt/docky/gameoflife.war velocity@10.0.0.17:/mnt/docky/"
+                sh "scp /mnt/docky/gameoflife.war velocity@10.0.0.38:/mnt/docky/"
+                sh "scp /mnt/docky/gameoflife.war velocity@10.0.0.85:/mnt/docky/"
+                sh "scp /mnt/docky/gameoflife.war velocity@10.0.0.106:/mnt/docky/"
+               
+            
+            
+        }
+        
+        }
+         
+         
+         
+        stage ('node-1') {
+            agent{
+      node {
+         label '10.0.0.17'
+    }
+    }
+            
+            steps{
+                sh "sudo yum install git -y"
+                
+                sh " sudo chown -R velocity:velocity /mnt/"
+                dir ('/mnt/docky'){
+                git 'https://github.com/ashrayp18/Pro.git'
+                
+                sh " wget https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.67/bin/apache-tomcat-9.0.67.tar.gz"
+                sh " sudo docker-compose up -d --scale one=2"
+              }
+             
+             
+        }
+                
+                
+            }
+            stage ('node-2') {
+            agent{
+      node {
+         label '10.0.0.38'
+    }
+    }
+            
+            steps{
+                sh "sudo yum install git -y"
+                
+                sh " sudo chown -R velocity:velocity /mnt/"
+                dir ('/mnt/docky'){
+                git 'https://github.com/ashrayp18/Pro.git'
+               
+                sh " wget https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.67/bin/apache-tomcat-9.0.67.tar.gz"
+                sh " sudo docker-compose up -d --scale one=2"
+              }
+            
+            
+        }
+        
+        }
+        stage ('node-3') {
+            agent{
+      node {
+         label '10.0.0.85'
+    }
+    }
+            
+            steps{
+                sh "sudo yum install git -y"
+                
+                sh " sudo chown -R velocity:velocity /mnt/"
+                dir ('/mnt/docky'){
+                git 'https://github.com/ashrayp18/Pro.git'
+                
+                sh " wget https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.67/bin/apache-tomcat-9.0.67.tar.gz"
+                sh " sudo docker-compose up -d --scale one=2"
+              }
+            
+            
+        }
+        
+        }
+        stage ('node-4') {
+            agent{
+      node {
+         label '10.0.0.106'
+    }
+    }
+            
+            steps{
+                sh "sudo yum install git -y"
+                
+                sh " sudo chown -R velocity:velocity /mnt/"
+                dir ('/mnt/docky'){
+                git 'https://github.com/ashrayp18/Pro.git'
+               
+                sh " wget https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.67/bin/apache-tomcat-9.0.67.tar.gz"
+                sh " sudo docker-compose up -d --scale one=2"
+              }
+            
+            
+        }
+        
+        }
+        
+        
+     }
+    
+}
+JENKINS JOB3:
+
+pipeline {				//indicate the job is written in Declarative Pipeline
+    agent any				//agent specifies where the pipeline will execute.
+    stages {
+        stage ("JOB1-JOB2") {		//an arbitrary stage name
+            steps {
+                build 'JOB1'	//this is where we specify which job to invoke.
+                build 'JOB2'
+            }
+        }
+    }
+}
+
+#######################################################################################################################################################
+ANSIBLE PLAYBOOK--(project.yaml)
+
+---
+- hosts: webserver
+  user: velocity
+  become: yes
+  connection: ssh
+  gather_facts: yes
+
+  tasks:
+    #    - name: insatlling java
+    #      action: yum pkg=java* state=absent
+
+      #    - name: insatlling java11
+      #iaction: yum pkg=java-openjdk11 state=present
+
+    - name: install java 11
+      command: sudo amazon-linux-extras install java-openjdk11=latest -y
+
+
+    - name: install docker
+      action: yum pkg=docker state=present
+
+
+    - name: start docker
+      action: service name=docker state=started
+
+      #    - name: docker-compose install-1
+      #    command: curl -L https://github.com/docker/compose/releases/download/1.21.0/docker-compose-`uname -s`-`uname -m` | sudo tee /usr/local/bin/docker-compose > /dev/null
+
+    - name: Install docker-compose from official github repo
+      remote_user: velocity
+      get_url:
+        url : https://github.com/docker/compose/releases/download/1.29.2/docker-compose-Linux-x86_64
+        dest: /usr/local/bin/docker-compose
+        mode: 'u+x,g+x'
+        remote_src: yes
+    - name: docker-compose install-2
+      command: sudo chmod +x /usr/local/bin/docker-compose
+
+      #    - name: docker-compose install-3
+      #      command: ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+
+    - name: docker-compose-ln
+      action: file src=/usr/local/bin/docker-compose dest=/usr/bin/docker-compose state=link force=yes
+
+    - name: make dir
+      action: file path=/mnt/docky state=directory
+
+###########################################################################################################################################################
+DOCKERFILE
+FROM ubuntu:18.04
+RUN apt-get update && apt-get install default-jre -y
+ADD apache-tomcat-9.0.67.tar.gz /data/tomcat
+COPY gameoflife.war /data/tomcat/apache-tomcat-9.0.67/webapps
+EXPOSE 8080
+CMD /data/tomcat/apache-tomcat-9.0.67/bin/catalina.sh run
+
+##########################################################################################################################################################
+DOCKER-COMPOSE
+
+version: '3'
+services:
+  one:
+    build:
+      context: /mnt/docky/
+    image: server-1
+    ports:
+    - "8091-8092:8080"
+
+#######################################################################################################################################################
+
+
